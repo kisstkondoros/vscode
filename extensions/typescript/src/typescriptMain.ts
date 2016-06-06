@@ -9,12 +9,12 @@
  * ------------------------------------------------------------------------------------------ */
 'use strict';
 
-import { env, languages, commands, workspace, window, Uri, ExtensionContext, IndentAction, Diagnostic, DiagnosticCollection, Range, DocumentFilter } from 'vscode';
+import { env, languages, commands, workspace, window, Uri, ExtensionContext, IndentAction, Diagnostic, DiagnosticCollection, Range, DocumentFilter, Selection } from 'vscode';
 
 // This must be the first statement otherwise modules might got loaded with
 // the wrong locale.
 import * as nls from 'vscode-nls';
-nls.config({locale: env.language});
+nls.config({ locale: env.language });
 
 import * as path from 'path';
 
@@ -33,7 +33,7 @@ import FormattingProvider from './features/formattingProvider';
 import BufferSyncSupport from './features/bufferSyncSupport';
 import CompletionItemProvider from './features/completionItemProvider';
 import WorkspaceSymbolProvider from './features/workspaceSymbolProvider';
-
+import CodeActionProvider from './features/codeActionProvider';
 import * as VersionStatus from './utils/versionStatus';
 import * as ProjectStatus from './utils/projectStatus';
 
@@ -73,6 +73,59 @@ export function activate(context: ExtensionContext): void {
 
 	context.subscriptions.push(commands.registerCommand('javascript.reloadProjects', () => {
 		clientHost.reloadProjects();
+	}));
+
+
+	context.subscriptions.push(commands.registerCommand('typescript.quickfix', (quickFix: Proto.QuickFix) => {
+		/** Utility method. Reason is we want to transact by file path */
+		function getRefactoringsByFilePath(refactorings: Proto.Refactoring[]): RefactoringsByFilePath {
+			var loc: RefactoringsByFilePath = {};
+			for (let refac of refactorings) {
+				if (!loc[refac.filePath]) {
+					loc[refac.filePath] = [];
+				}
+				loc[refac.filePath].push(refac);
+			}
+
+			// sort each of these in descending by start location
+			for (let filePath in loc) {
+				let refactorings = loc[filePath];
+				refactorings.sort((a: Proto.Refactoring, b: Proto.Refactoring) => {
+					return (b.span.start - a.span.start);
+				});
+			}
+
+			return loc;
+		}
+		let refactorings = getRefactoringsByFilePath(quickFix.refactorings);
+		function applyRefactorings(refactorings: RefactoringsByFilePath) {
+			let refactorPaths = Object.keys(refactorings);
+			refactorPaths.forEach((rp) => {
+				let refactoringForPath = refactorings[rp];
+				workspace.openTextDocument(Uri.file(rp)).then((document) => {
+					window.showTextDocument(document).then(editor => {
+						let lastRange: Range;
+						editor.edit((builder) => {
+							refactoringForPath.forEach(refactoring => {
+								var range = new Range(editor.document.positionAt(refactoring.span.start), editor.document.positionAt(refactoring.span.start + refactoring.span.length));
+								builder.replace(range, refactoring.newText);
+								lastRange = range;
+							});
+						}).then(() => {
+							if (lastRange) {
+								editor.revealRange(lastRange);
+								editor.selection = new Selection(lastRange.end, lastRange.end);
+							}
+						});
+					});
+				}, (reason) => {
+					console.log(reason);
+				});
+
+			});
+		}
+		applyRefactorings(refactorings);
+
 	}));
 
 	window.onDidChangeActiveTextEditor(VersionStatus.showHideStatus, null, context.subscriptions);
@@ -155,6 +208,7 @@ class LanguageProvider {
 			languages.registerDocumentRangeFormattingEditProvider(selector, this.formattingProvider);
 			languages.registerOnTypeFormattingEditProvider(selector, this.formattingProvider, ';', '}', '\n');
 			languages.registerWorkspaceSymbolProvider(new WorkspaceSymbolProvider(client, modeId));
+			languages.registerCodeActionsProvider(selector, new CodeActionProvider(client));
 			languages.setLanguageConfiguration(modeId, {
 				indentationRules: {
 					// ^(.*\*/)?\s*\}.*$
@@ -371,9 +425,14 @@ class TypeScriptServiceClientHost implements ITypescriptServiceClientHost {
 			let range = new Range(start.line - 1, start.offset - 1, end.line - 1, end.offset - 1);
 			let converted = new Diagnostic(range, text);
 			converted.source = source;
-			converted.code = diagnostic.code;
 			result.push(converted);
 		}
 		return result;
 	}
+}
+
+
+/** You don't need to create this manually. Just use the util function */
+interface RefactoringsByFilePath {
+	[filePath: string]: Proto.Refactoring[];
 }

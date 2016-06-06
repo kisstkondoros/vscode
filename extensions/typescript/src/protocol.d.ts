@@ -223,6 +223,20 @@ export interface FileSpan extends TextSpan {
     file: string;
 }
 
+export interface SimpleTextSpan {
+    start: number;
+    length: number;
+}
+
+export class TextChange {
+    span: SimpleTextSpan;
+    newText: string;
+}
+
+export interface Refactoring extends TextChange {
+    filePath: string;
+}
+
 /**
   * Definition response message.  Gives text range for definition.
   */
@@ -344,6 +358,22 @@ export interface RenameRequestArgs extends FileLocationRequestArgs {
     findInStrings?: boolean;
 }
 
+export interface QuickFixRequest extends FileLocationRequest {
+}
+
+export interface QuickFixResponse extends Response {
+    body?: QuickFixResponseBody;
+}
+
+export interface QuickFix {
+  display: string;
+  refactorings: Refactoring[];
+}
+
+export interface QuickFixResponseBody {
+    quickFixes?: QuickFix[];
+    message: string;
+}
 
 /**
   * Rename request; value of command field is "rename". Return
@@ -445,7 +475,7 @@ export interface FormatOptions extends EditorOptions {
     /** Defines space handling after a comma delimiter. Default value is true. */
     insertSpaceAfterCommaDelimiter?: boolean;
 
-    /** Defines space handling after a semicolon in a for statemen. Default value is true */
+    /** Defines space handling after a semicolon in a for statement. Default value is true */
     insertSpaceAfterSemicolonInForStatements?: boolean;
 
     /** Defines space handling after a binary operator. Default value is true. */
@@ -519,6 +549,11 @@ export interface OpenRequestArgs extends FileRequestArgs {
      * Then the known content will be used upon opening instead of the disk copy
      */
     fileContent?: string;
+    /**
+     * Used to specify the script kind of the file explicitly. It could be one of the following:
+     *      "TS", "JS", "TSX", "JSX"
+     */
+    scriptKindName?: "TS" | "JS" | "TSX" | "JSX";
 }
 
 /**
@@ -836,7 +871,7 @@ export interface SignatureHelpItem {
     prefixDisplayParts: SymbolDisplayPart[];
 
     /**
-     * The suffix disaply parts.
+     * The suffix display parts.
      */
     suffixDisplayParts: SymbolDisplayPart[];
 
@@ -904,7 +939,7 @@ export interface SignatureHelpRequest extends FileLocationRequest {
 }
 
 /**
- * Repsonse object for a SignatureHelpRequest.
+ * Response object for a SignatureHelpRequest.
  */
 export interface SignatureHelpResponse extends Response {
     body?: SignatureHelpItems;
@@ -971,7 +1006,7 @@ export interface GeterrRequest extends Request {
   */
 export interface Diagnostic {
     /**
-      * Starting file location at which text appies.
+      * Starting file location at which text applies.
       */
     start: Location;
 
@@ -984,11 +1019,6 @@ export interface Diagnostic {
       * Text of diagnostic message.
       */
     text: string;
-
-    /**
-      * Unique code of diagnostic.
-      */
-    code: number;
 }
 
 export interface DiagnosticEventBody {
@@ -1009,6 +1039,32 @@ export interface DiagnosticEventBody {
   */
 export interface DiagnosticEvent extends Event {
     body?: DiagnosticEventBody;
+}
+
+export interface ConfigFileDiagnosticEventBody {
+    /**
+     * The file which trigged the searching and error-checking of the config file
+     */
+    triggerFile: string;
+
+    /**
+     * The name of the found config file.
+     */
+    configFile: string;
+
+    /**
+     * An arry of diagnostic information items for the found config file.
+     */
+    diagnostics: Diagnostic[];
+}
+
+/**
+ * Event message for "configFileDiag" event type.
+ * This event provides errors for a found config file.
+ */
+export interface ConfigFileDiagnosticEvent extends Event {
+    body?: ConfigFileDiagnosticEventBody;
+    event: "configFileDiag";
 }
 
 /**
@@ -1185,7 +1241,7 @@ export interface BraceRequest extends FileLocationRequest {
 }
 
 /**
-  * NavBar itesm request; value of command field is "navbar".
+  * NavBar items request; value of command field is "navbar".
   * Return response giving the list of navigation bar entries
   * extracted from the requested file.
   */
@@ -1217,6 +1273,11 @@ export interface NavigationBarItem {
       * Optional children.
       */
     childItems?: NavigationBarItem[];
+
+    /**
+      * Number of levels deep this item should appear.
+      */
+    indent: number;
 }
 
 export interface NavBarResponse extends Response {

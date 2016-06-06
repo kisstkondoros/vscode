@@ -39,5 +39,6 @@ export interface ITypescriptServiceClient {
 	execute(command:'occurrences', args: Proto.FileLocationRequestArgs, token?: CancellationToken): Promise<Proto.OccurrencesResponse>;
 	execute(command:'projectInfo', args: Proto.ProjectInfoRequestArgs, token?: CancellationToken): Promise<Proto.ProjectInfoResponse>;
 	execute(command:'reloadProjects', args: any, expectedResult:boolean, token?: CancellationToken): Promise<any>;
+	execute(command:'quickfix', args: Proto.FileRequestArgs, token?: CancellationToken): Promise<Proto.QuickFixResponse>;
 	execute(command:string, args:any, expectedResult:boolean| CancellationToken, token?: CancellationToken):Promise<any>;
 }
